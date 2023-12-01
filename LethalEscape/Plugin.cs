@@ -129,7 +129,7 @@ namespace LethalEscape
 				}
 				if (__instance.currentBehaviourStateIndex == 2)
 				{
-					if (__instance.agent.speed == 0 && __instance.stunNormalizedTimer <= 0 && __instance.targetPlayer && !__instance.targetPlayer.isInsideFactory)
+					if (__instance.agent.speed == 0 && __instance.stunNormalizedTimer <= 0 && __instance.targetPlayer != null && !__instance.targetPlayer.isInsideFactory)
 					{
 						__instance.popUpTimer = -4;
 					}
@@ -187,7 +187,7 @@ namespace LethalEscape
 						SendEnemyOutside(__instance, true);
 					}
 				}
-				if (__instance.targetPlayer && __instance.targetPlayer.isInsideFactory == false && (__instance.currentBehaviourStateIndex == 1 || __instance.evadeStealthTimer > 0))
+				if (__instance.targetPlayer != null && __instance.targetPlayer.isInsideFactory == false && (__instance.currentBehaviourStateIndex == 1 || __instance.evadeStealthTimer > 0))
 				{
 					
 					if (Time.time - TimeStartTeleport >= 10)
@@ -249,7 +249,7 @@ namespace LethalEscape
 					}
 				}
 
-				if (__instance.targetPlayer.isInsideFactory == false && __instance.searchForPlayer.inProgress == true)
+				if (__instance.targetPlayer != null &&__instance.targetPlayer.isInsideFactory == false && __instance.searchForPlayer.inProgress == true)
 				{
 					SendEnemyOutside(__instance, true);
 				}
