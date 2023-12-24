@@ -8,16 +8,18 @@ using BepInEx.Logging;
 using GameNetcodeStuff;
 using HarmonyLib;
 using UnityEngine;
-
+using UnityEngine.PlayerLoop;
 
 namespace LethalEscape
 {
 	[BepInPlugin(modGUID, modName, modVersion)]
 	public class Plugin : BaseUnityPlugin
 	{
+		public static GameObject ExtraValues;
+
 		private const string modGUID = "xCeezy.LethalEscape";
 		private const string modName = "Lethal Escape";
-		private const string modVersion = "0.5";
+		private const string modVersion = "0.8";
 		private void Awake()
 		{
 			CanThumperEscape = Config.Bind("Can Monster Escape", "ThumperEscape", true, "Whether or not the Thumper can escape");
@@ -45,6 +47,14 @@ namespace LethalEscape
 			JesterSpeedIncreasePerSecond = Config.Bind("Escape Settings", "Jester Speed Increase", 1.35f, "How much speed the jester gets per second");
 			MaxJesterOutsideSpeed = Config.Bind("Escape Settings", "Jester Outside Speed", 10f, "The max speed the Jester moves while outside (5 is the speed its at while in the box and 18 is jesters max speed inside the facility)");
 			
+			if (ExtraValues == null)
+			{
+				ExtraValues = new GameObject();
+				DontDestroyOnLoad(ExtraValues);
+				ExtraValues.hideFlags = HideFlags.HideAndDontSave;
+				ExtraValues.AddComponent<LETimerFunctions>();
+			}
+
 			mls = BepInEx.Logging.Logger.CreateLogSource("GameMaster");
 			// Plugin startup logic
 			mls.LogInfo($"Loaded {modGUID}. Patching.");
@@ -271,7 +281,6 @@ namespace LethalEscape
 			if (CanBrackenEscape.Value == true && RoundManager.Instance.NetworkManager.IsHost )
 			{
 				// Increase 60 second timer to have chance to escape
-				MinuteEscapeTimerBracken += Time.deltaTime / FindObjectsOfType(typeof(FlowermanAI)).Length;
 				// Checking if the AI is not already outside
 				if (!__instance.isOutside)
 				{
@@ -293,10 +302,10 @@ namespace LethalEscape
 					else
 					{
 						// check if the random escape timer has hit 60 seconds
-						if (MinuteEscapeTimerBracken >= 60 && __instance.targetPlayer == null)
+						if (LETimerFunctions.MinuteEscapeTimerBracken >= 60 && __instance.targetPlayer == null)
 						{
 							// If so then reset it and calculate the chance to see if it should escape
-							MinuteEscapeTimerBracken = 0;
+							LETimerFunctions.MinuteEscapeTimerBracken = 0;
 							if (UnityEngine.Random.Range(1, 100) <= BrackenChanceToEscapeEveryMinute.Value)
 							{
 								SendEnemyOutside(__instance, false);
@@ -338,6 +347,8 @@ namespace LethalEscape
 						__instance.KillPlayerAnimationServerRpc((int)target.playerClientId);
 						___startingKillAnimationLocalClient = true;
 					}
+
+
 				}
 			}
 		}
@@ -360,7 +371,6 @@ namespace LethalEscape
 
 			if (CanHoardingBugEscape.Value == true && __instance.IsOwner)
 			{
-				MinuteEscapeTimerHoardingBug += Time.deltaTime / FindObjectsOfType(typeof(HoarderBugAI)).Length;
 				if (!__instance.isOutside)
 				{
 
@@ -372,10 +382,10 @@ namespace LethalEscape
 					else
 					{
 						
-						if (MinuteEscapeTimerHoardingBug >= 60 && __instance.targetPlayer == null)
+						if (LETimerFunctions.MinuteEscapeTimerHoardingBug >= 60 && __instance.targetPlayer == null)
 						{
-							MinuteEscapeTimerHoardingBug = 0;
-							if (UnityEngine.Random.Range(1, 100) <= HoardingBugChanceToEscapeEveryMinute.Value)
+							LETimerFunctions.MinuteEscapeTimerHoardingBug = 0;
+							if (UnityEngine.Random.Range(1, 100) <= HoardingBugChanceToEscapeEveryMinute.Value / FindObjectsOfType(typeof(HoarderBugAI)).Length)
 							{
 								SendEnemyOutside(__instance, false);
 								if (UnityEngine.Random.Range(1, 100) <= HoardingBugChanceToNestNearShip.Value)
@@ -711,7 +721,6 @@ namespace LethalEscape
 
 			if (CanPufferEscape.Value == true && RoundManager.Instance.NetworkManager.IsHost)
 			{
-				MinuteEscapeTimerPuffer += Time.deltaTime / FindObjectsOfType(typeof(PufferAI)).Length;
 				if (!__instance.isOutside)
 				{
 					if (__instance.targetPlayer != null && !__instance.targetPlayer.isInsideFactory)
@@ -721,9 +730,9 @@ namespace LethalEscape
 					else
 					{
 						
-						if (MinuteEscapeTimerPuffer >= 60 && __instance.targetPlayer == null)
+						if (LETimerFunctions.MinuteEscapeTimerPuffer >= 60 && __instance.targetPlayer == null)
 						{
-							MinuteEscapeTimerPuffer = 0;
+							LETimerFunctions.MinuteEscapeTimerPuffer = 0;
 							if (UnityEngine.Random.Range(1, 100) <= PufferChanceToEscapeEveryMinute.Value)
 							{
 								SendEnemyOutside(__instance, false);
@@ -863,9 +872,7 @@ namespace LethalEscape
 		public static ConfigEntry<bool> CanPufferEscape;
 
 		public static float JesterSpeedWindup;
-		public static float MinuteEscapeTimerPuffer;
-		public static float MinuteEscapeTimerBracken;
-		public static float MinuteEscapeTimerHoardingBug;
+
 
 		public static ConfigEntry<float> BrackenChanceToEscapeEveryMinute;
 		public static ConfigEntry<float> PufferChanceToEscapeEveryMinute;
