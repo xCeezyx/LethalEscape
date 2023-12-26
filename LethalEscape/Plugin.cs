@@ -19,7 +19,7 @@ namespace LethalEscape
 
 		private const string modGUID = "xCeezy.LethalEscape";
 		private const string modName = "Lethal Escape";
-		private const string modVersion = "0.8";
+		private const string modVersion = "0.8.2";
 		private void Awake()
 		{
 			CanThumperEscape = Config.Bind("Can Monster Escape", "ThumperEscape", true, "Whether or not the Thumper can escape");
@@ -32,11 +32,23 @@ namespace LethalEscape
 			CanHygrodereEscape = Config.Bind("Can Monster Escape", "HygrodereEscape", false, "Whether or not the Hygrodere/Slime can escape");
 			CanPufferEscape = Config.Bind("Can Monster Escape", "CanPufferEscape", true, "Whether or not the Puffer/Spore Lizard can escape");
 
-			PufferChanceToEscapeEveryMinute = Config.Bind("Escape Settings", "Puffer Escape Chance", 15f, "The chance that the Puffer/Spore Lizard will escape randomly every minute");
+			ThumperChanceToSpawnOutside = Config.Bind("Spawn Escape Settings", "ThumperSpawnOutsideChance", 5f, "The chance that the Thumper will spawn outside");
+			BrackenChanceToSpawnOutside = Config.Bind("Spawn Escape Settings", "BrackenSpawnOutsideChance", 10f, "The chance that the Bracken will spawn outside");
+			JesterChanceToSpawnOutside = Config.Bind("Spawn Escape Settings", "JesterSpawnOutsideChance", 0f, "The chance that the Jester will spawn outside");
+			HoardingBugChanceToSpawnOutside = Config.Bind("Spawn Escape Settings", "HoardingBugSpawnOutsideChance", 30f, "The chance that the Hoarding Bug will spawn outside");
+			SpiderChanceToSpawnOutside = Config.Bind("Spawn Escape Settings", "SpiderSpawnOutsideChance", 5f, "The chance that the Spider will spawn outside");
+			NutCrackerChanceToSpawnOutside = Config.Bind("Spawn Escape Settings", "NutCrackerSpawnOutsideChance", 5f, "The chance that the NutCracker will spawn outside");
+			HygrodereChanceToSpawnOutside = Config.Bind("Spawn Escape Settings", "HygrodereSpawnOutsideChance", 0f, "The chance that the Hygrodere will spawn outside");
+			PufferChanceToSpawnOutside = Config.Bind("Spawn Escape Settings", "PufferSpawnOutsideChance", 5f, "The chance that the Puffer will spawn outside");
+
+
+			PufferChanceToEscapeEveryMinute = Config.Bind("Escape Settings", "Puffer Escape Chance", 10f, "The chance that the Puffer/Spore Lizard will escape randomly every minute");
 			BrackenChanceToEscapeEveryMinute = Config.Bind("Escape Settings", "Bracken Escape Chance", 10f, "The chance that the Bracken will escape randomly every minute");
 			HoardingBugChanceToEscapeEveryMinute = Config.Bind("Escape Settings", "HoardingBug Escape Chance", 15f, "The chance that the Hoarding Bug will escape randomly every minute");
+
 			HoardingBugChanceToNestNearShip = Config.Bind("Escape Settings", "HoardingBugShipNestChance", 50f, "The chance that the Hoarding Bug will make their nest at/near the ship");
 
+			
 
 			BrackenEscapeDelay = Config.Bind("Escape Settings", "Bracken Escape Delay", 5f, "Time it takes for the Bracken to follow a player outside");
 			ThumperEscapeDelay = Config.Bind("Escape Settings", "Thumper Escape Delay", -5f, "Time it takes for the Thumper to follow a player outside which is based on how long the player was seen minus this value (Might break when under -15 and will force thumper outside when it sees someone when above 0)");
@@ -79,7 +91,7 @@ namespace LethalEscape
 				return;
 			}
 
-			if (CanThumperEscape.Value == true && __instance.IsOwner)
+			if (CanThumperEscape.Value == true && RoundManager.Instance.NetworkManager.IsHost)
 			{
 				//--- CHECK TO MAKE SURE WE ARE INSIDE BEFORE CALCULATING ESCAPE CODE---
 				if (!__instance.isOutside)
@@ -148,6 +160,18 @@ namespace LethalEscape
 		}
 
 
+		//--- Chance to Spawn Outside---
+		[HarmonyPatch(typeof(CrawlerAI), "Start")]
+		[HarmonyPostfix]
+		static void CrawlerAILEPostfixStart(CrawlerAI __instance)
+		{
+			if (RoundManager.Instance.NetworkManager.IsHost && ThumperChanceToSpawnOutside.Value != 0 && UnityEngine.Random.Range(1, 100) <= ThumperChanceToSpawnOutside.Value)
+			{
+				SendEnemyOutside(__instance, true);
+			}
+		}
+
+
 		//------------ JESTER AI----------------
 		//------------ JESTER AI----------------
 
@@ -163,12 +187,12 @@ namespace LethalEscape
 				return;
 			}
 
-			if (CanJesterEscape.Value == true && __instance.IsOwner)
+			if (CanJesterEscape.Value == true && RoundManager.Instance.NetworkManager.IsHost)
 			{ 
 				if (!__instance.isOutside)
 				{
 					
-					if (__instance.currentBehaviourStateIndex == 2 && (!__instance.targetPlayer.isInsideFactory || __instance.targetPlayer == null) )
+					if (__instance.currentBehaviourStateIndex == 2 && __instance.targetPlayer != null && !__instance.targetPlayer.isInsideFactory )
 					{
 						JesterSpeedWindup = 0;
 						SendEnemyOutside(__instance, false);
@@ -189,10 +213,14 @@ namespace LethalEscape
 		[HarmonyPostfix]
 		static void JesterLEPostfixAI(JesterAI __instance)
 		{
-			if (CanJesterEscape.Value == true)
+			if (CanJesterEscape.Value == true && RoundManager.Instance.NetworkManager.IsHost)
 			{
 				if (__instance.isOutside)
 				{
+					if (__instance.OwnerClientId != GameNetworkManager.Instance.localPlayerController.actualClientId)
+					{
+						__instance.ChangeOwnershipOfEnemy(GameNetworkManager.Instance.localPlayerController.actualClientId);
+					}
 
 					bool flag = false;
 					for (int i = 0; i < StartOfRound.Instance.allPlayerScripts.Length; i++)
@@ -225,31 +253,52 @@ namespace LethalEscape
 			{
 				return;
 			}
-
-			// Check if outside and player calling this is host
-			if (__instance.isOutside && RoundManager.Instance.NetworkManager.IsHost)
+			if (RoundManager.Instance.NetworkManager.IsHost)
 			{
-				PlayerControllerB target = other.gameObject.GetComponent<PlayerControllerB>();
-				// Check if target is valid, not dead, is currently being controlled by a player, and the target is not the host (because then the override is not needed)
-				if (target != null && !target.isPlayerDead && target.isPlayerControlled && target != GameNetworkManager.Instance.localPlayerController)
+				// Check if outside and player calling this is host
+				if (__instance.isOutside)
 				{
-					if (!other.gameObject.GetComponent<PlayerControllerB>())
+					if (__instance.OwnerClientId != GameNetworkManager.Instance.localPlayerController.actualClientId)
 					{
-						return;
+						__instance.ChangeOwnershipOfEnemy(GameNetworkManager.Instance.localPlayerController.actualClientId);
 					}
+					PlayerControllerB target = other.gameObject.GetComponent<PlayerControllerB>();
+					// Check if target is valid, not dead, is currently being controlled by a player, and the target is not the host (because then the override is not needed)
+					if (target != null && !target.isPlayerDead && target.isPlayerControlled && target != GameNetworkManager.Instance.localPlayerController)
+					{
+						if (!other.gameObject.GetComponent<PlayerControllerB>())
+						{
+							return;
+						}
 
 
-					if (__instance.currentBehaviourStateIndex != 2)
-					{
-						return;
+						if (__instance.currentBehaviourStateIndex != 2)
+						{
+							return;
+						}
+
+						PlayerControllerB playerControllerB = __instance.MeetsStandardPlayerCollisionConditions(other, false, false);
+						if (playerControllerB != null)
+						{
+							__instance.KillPlayerServerRpc((int)playerControllerB.playerClientId);
+						}
 					}
 
-					PlayerControllerB playerControllerB = __instance.MeetsStandardPlayerCollisionConditions(other, false, false);
-					if (playerControllerB != null)
-					{
-						__instance.KillPlayerServerRpc((int)playerControllerB.playerClientId);
-					}
 				}
+			}
+
+
+		}
+
+
+		//--- Chance to Spawn Outside---
+		[HarmonyPatch(typeof(JesterAI), "Start")]
+		[HarmonyPostfix]
+		static void JesterAILEPostfixStart(JesterAI __instance)
+		{
+			if (RoundManager.Instance.NetworkManager.IsHost && JesterChanceToSpawnOutside.Value != 0 && UnityEngine.Random.Range(1, 100) <= JesterChanceToSpawnOutside.Value)
+			{
+				SendEnemyOutside(__instance, true);
 			}
 		}
 
@@ -257,14 +306,6 @@ namespace LethalEscape
 		//------------ Bracken AI----------------
 		//------------ Bracken AI----------------
 
-
-		//--- Reset Bracken Escape Timer---
-		[HarmonyPatch(typeof(FlowermanAI), "Start")]
-		[HarmonyPrefix]
-		static void FlowermanAILEPrefixStart(FlowermanAI __instance)
-		{
-			TimeStartTeleport = 0f;
-		}
 
 		//--- Bracken LEAVE CODE---
 		[HarmonyPatch(typeof(FlowermanAI), "Update")]
@@ -306,7 +347,7 @@ namespace LethalEscape
 						{
 							// If so then reset it and calculate the chance to see if it should escape
 							LETimerFunctions.MinuteEscapeTimerBracken = 0;
-							if (UnityEngine.Random.Range(1, 100) <= BrackenChanceToEscapeEveryMinute.Value)
+							if (BrackenChanceToEscapeEveryMinute.Value  != 0 && UnityEngine.Random.Range(1, 100) <= BrackenChanceToEscapeEveryMinute.Value)
 							{
 								SendEnemyOutside(__instance, false);
 							}
@@ -322,6 +363,32 @@ namespace LethalEscape
 				}
 			}
 		}
+
+		//------Bracken Override ownership post fix
+		//--- Bracken LEAVE CODE---
+		[HarmonyPatch(typeof(FlowermanAI), "Update")]
+		[HarmonyPostfix]
+		static void FlowermanAILEPostfixAI(FlowermanAI __instance)
+		{
+			if (__instance.isEnemyDead)
+			{
+				return;
+			}
+
+			// Check if bracken escaping is enabled in config and if the player calling this code is the host
+			if (CanBrackenEscape.Value == true && RoundManager.Instance.NetworkManager.IsHost)
+			{
+				if (__instance.isOutside == true)
+				{
+					if (__instance.OwnerClientId != GameNetworkManager.Instance.localPlayerController.actualClientId)
+					{
+						__instance.ChangeOwnershipOfEnemy(GameNetworkManager.Instance.localPlayerController.actualClientId);
+					}
+				}
+			}
+		}
+
+
 
 		//Bracken outside host override attack patch
 		[HarmonyPatch(typeof(FlowermanAI), "OnCollideWithPlayer")]
@@ -354,6 +421,19 @@ namespace LethalEscape
 		}
 
 
+		//--- Reset Bracken Escape Timer And chance to Spawn Outside---
+		[HarmonyPatch(typeof(FlowermanAI), "Start")]
+		[HarmonyPostfix]
+		static void FlowermanAILEPostfixStart(FlowermanAI __instance)
+		{
+			TimeStartTeleport = 0f;
+			if (RoundManager.Instance.NetworkManager.IsHost && BrackenChanceToSpawnOutside.Value != 0 && UnityEngine.Random.Range(1, 100) <= BrackenChanceToSpawnOutside.Value)
+			{
+				SendEnemyOutside(__instance, true);
+			}
+		}
+
+
 		//------------ Hoarder Bug AI----------------
 		//------------ Hoarder Bug AI----------------
 
@@ -369,7 +449,7 @@ namespace LethalEscape
 				return;
 			}
 
-			if (CanHoardingBugEscape.Value == true && __instance.IsOwner)
+			if (CanHoardingBugEscape.Value == true && RoundManager.Instance.NetworkManager.IsHost)
 			{
 				if (!__instance.isOutside)
 				{
@@ -388,7 +468,7 @@ namespace LethalEscape
 							if (UnityEngine.Random.Range(1, 100) <= HoardingBugChanceToEscapeEveryMinute.Value / FindObjectsOfType(typeof(HoarderBugAI)).Length)
 							{
 								SendEnemyOutside(__instance, false);
-								if (UnityEngine.Random.Range(1, 100) <= HoardingBugChanceToNestNearShip.Value)
+								if (HoardingBugChanceToNestNearShip.Value != 0 && UnityEngine.Random.Range(1, 100) <= HoardingBugChanceToNestNearShip.Value)
 								{
 									StartOfRound GetElevatorPosFromGameLogic = (StartOfRound)FindObjectOfType(typeof(StartOfRound));
 
@@ -436,6 +516,19 @@ namespace LethalEscape
 				}
 			}
 		}
+
+
+		//--- Chance to Spawn Outside---
+		[HarmonyPatch(typeof(HoarderBugAI), "Start")]
+		[HarmonyPostfix]
+		static void HoardingBugAILEPostfixStart(HoarderBugAI __instance)
+		{
+			if (RoundManager.Instance.NetworkManager.IsHost && HoardingBugChanceToSpawnOutside.Value != 0 && UnityEngine.Random.Range(1, 100) <= HoardingBugChanceToSpawnOutside.Value)
+			{
+				SendEnemyOutside(__instance, true);
+			}
+		}
+
 
 		//------------ Coil Head AI----------------
 		//------------ Coil Head AI----------------
@@ -507,6 +600,7 @@ namespace LethalEscape
 			}
 		}
 
+
 		//------------ Spider AI----------------
 		//------------ Spider AI----------------
 
@@ -530,7 +624,7 @@ namespace LethalEscape
 						SendEnemyOutside(__instance, false);
 						__instance.meshContainerPosition = __instance.serverPosition;
 						__instance.meshContainerTarget = __instance.serverPosition;
-						__instance.maxWebTrapsToPlace += UnityEngine.Random.Range(8, 14);
+						__instance.maxWebTrapsToPlace += UnityEngine.Random.Range(SpiderMinWebsOutside.Value, SpiderMaxWebsOutside.Value);
 					}
 				}
 				else
@@ -567,6 +661,21 @@ namespace LethalEscape
 					}
 
 				}
+			}
+		}
+
+
+		//--- Chance to Spawn Outside---
+		[HarmonyPatch(typeof(SandSpiderAI), "Start")]
+		[HarmonyPostfix]
+		static void SpiderAILEPostfixStart(SandSpiderAI __instance)
+		{
+			if (RoundManager.Instance.NetworkManager.IsHost && SpiderChanceToSpawnOutside.Value != 0 && UnityEngine.Random.Range(1, 100) <= SpiderChanceToSpawnOutside.Value)
+			{
+				SendEnemyOutside(__instance, true);
+				__instance.meshContainerPosition = __instance.serverPosition;
+				__instance.meshContainerTarget = __instance.serverPosition;
+				__instance.maxWebTrapsToPlace = UnityEngine.Random.Range(SpiderMinWebsOutside.Value, SpiderMaxWebsOutside.Value);
 			}
 		}
 
@@ -638,6 +747,18 @@ namespace LethalEscape
 		}
 
 
+		//--- Chance to Spawn Outside---
+		[HarmonyPatch(typeof(NutcrackerEnemyAI), "Start")]
+		[HarmonyPostfix]
+		static void NutCrackerAILEPostfixStart(NutcrackerEnemyAI __instance)
+		{
+			if (RoundManager.Instance.NetworkManager.IsHost && NutCrackerChanceToSpawnOutside.Value != 0 && UnityEngine.Random.Range(1, 100) <= NutCrackerChanceToSpawnOutside.Value)
+			{
+				SendEnemyOutside(__instance, true);
+			}
+		}
+
+
 		//------------ Slime/Hygrodere AI----------------
 		//------------ Slime/Hygrodere AI----------------
 
@@ -659,6 +780,7 @@ namespace LethalEscape
 					if (__instance.targetPlayer != null && !__instance.targetPlayer.isInsideFactory)
 					{
 						SendEnemyOutside(__instance, false);
+						__instance.centerPoint = __instance.transform;
 					}
 				}
 				else
@@ -705,6 +827,19 @@ namespace LethalEscape
 		}
 
 
+		//--- Chance to Spawn Outside---
+		[HarmonyPatch(typeof(BlobAI), "Start")]
+		[HarmonyPostfix]
+		static void HygrodereAILEPostfixStart(BlobAI __instance)
+		{
+			if (RoundManager.Instance.NetworkManager.IsHost && HygrodereChanceToSpawnOutside.Value != 0 && UnityEngine.Random.Range(1, 100) <= HygrodereChanceToSpawnOutside.Value)
+			{
+				SendEnemyOutside(__instance, true);
+				__instance.centerPoint = __instance.transform;
+			}
+		}
+
+
 		//------------ Puffer/Lizard AI----------------
 		//------------ Puffer/Lizard AI----------------
 
@@ -733,7 +868,7 @@ namespace LethalEscape
 						if (LETimerFunctions.MinuteEscapeTimerPuffer >= 60 && __instance.targetPlayer == null)
 						{
 							LETimerFunctions.MinuteEscapeTimerPuffer = 0;
-							if (UnityEngine.Random.Range(1, 100) <= PufferChanceToEscapeEveryMinute.Value)
+							if (PufferChanceToEscapeEveryMinute.Value != 0 && UnityEngine.Random.Range(1, 100) <= PufferChanceToEscapeEveryMinute.Value)
 							{
 								SendEnemyOutside(__instance, false);
 							}
@@ -772,6 +907,18 @@ namespace LethalEscape
 						__instance.BitePlayerServerRpc((int)playerControllerB.playerClientId);
 					}
 				}
+			}
+		}
+
+
+		//--- Chance to Spawn Outside---
+		[HarmonyPatch(typeof(PufferAI), "Start")]
+		[HarmonyPostfix]
+		static void PufferAILEPostfixStart(PufferAI __instance)
+		{
+			if (RoundManager.Instance.NetworkManager.IsHost && PufferChanceToSpawnOutside.Value != 0 && UnityEngine.Random.Range(1, 100) <= PufferChanceToSpawnOutside.Value)
+			{
+				SendEnemyOutside(__instance, true);
 			}
 		}
 
@@ -836,12 +983,16 @@ namespace LethalEscape
 				}
 			}
 
+			if (__instance.OwnerClientId != GameNetworkManager.Instance.localPlayerController.actualClientId)
+			{
+				__instance.ChangeOwnershipOfEnemy(GameNetworkManager.Instance.localPlayerController.actualClientId);
+			}
+
 			Transform ClosestNodePos = __instance.ChooseClosestNodeToPosition(__instance.serverPosition, false, 0);
 
 			if (Vector3.Magnitude(ClosestNodePos.position - __instance.serverPosition) > 10 || SpawnOnDoor == false)
 			{
 				__instance.serverPosition = ClosestNodePos.position;
-				__instance.transform.position = __instance.serverPosition;
 			}
 			__instance.transform.position = __instance.serverPosition;
 
@@ -877,7 +1028,17 @@ namespace LethalEscape
 		public static ConfigEntry<float> BrackenChanceToEscapeEveryMinute;
 		public static ConfigEntry<float> PufferChanceToEscapeEveryMinute;
 		public static ConfigEntry<float> HoardingBugChanceToEscapeEveryMinute;
+
 		public static ConfigEntry<float> HoardingBugChanceToNestNearShip;
+
+		public static ConfigEntry<float> HoardingBugChanceToSpawnOutside;
+		public static ConfigEntry<float> BrackenChanceToSpawnOutside;
+		public static ConfigEntry<float> PufferChanceToSpawnOutside;
+		public static ConfigEntry<float> JesterChanceToSpawnOutside;
+		public static ConfigEntry<float> HygrodereChanceToSpawnOutside;
+		public static ConfigEntry<float> NutCrackerChanceToSpawnOutside;
+		public static ConfigEntry<float> ThumperChanceToSpawnOutside;
+		public static ConfigEntry<float> SpiderChanceToSpawnOutside;
 
 		public static ConfigEntry<float> JesterSpeedIncreasePerSecond;
 		public static ConfigEntry<float> MaxJesterOutsideSpeed;
