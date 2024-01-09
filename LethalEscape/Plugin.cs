@@ -142,19 +142,26 @@ namespace LethalEscape
 				// Check if target is valid, not dead, is currently being controlled by a player, and the target is not the host (because then the override is not needed)
 				if (target != null && !target.isPlayerDead && target.isPlayerControlled && target != GameNetworkManager.Instance.localPlayerController)
 				{
-					if (__instance.agent.speed <= 0f)
+
+					if (__instance.timeSinceHittingPlayer <= 0.65)
 					{
 						return;
 					}
-					PlayerControllerB playerControllerB = __instance.MeetsStandardPlayerCollisionConditions(other, false, false);
-					if (playerControllerB != null)
+					if (__instance.stunNormalizedTimer > 0f)
 					{
-
-						playerControllerB.DamagePlayer(40, true, true, CauseOfDeath.Mauling, 0, false, default(Vector3));
-						__instance.agent.speed = 0f;
-						__instance.HitPlayerServerRpc((int)GameNetworkManager.Instance.localPlayerController.playerClientId);
-						GameNetworkManager.Instance.localPlayerController.JumpToFearLevel(1f, true);
+						return;
 					}
+
+					__instance.timeSinceHittingPlayer = 0f;
+					__instance.ChangeOwnershipOfEnemy(GameNetworkManager.Instance.localPlayerController.actualClientId);
+					target.DamagePlayer(40, true, true, CauseOfDeath.Mauling, 0, false, default(Vector3));
+					target.DamagePlayerFromOtherClientServerRpc(40, Vector3.zero, -1);
+
+					
+					__instance.agent.speed = 0f;
+					__instance.HitPlayerServerRpc((int)target.playerClientId);
+					target.JumpToFearLevel(1f, true);
+
 				}
 			}
 		}
@@ -277,11 +284,9 @@ namespace LethalEscape
 							return;
 						}
 
-						PlayerControllerB playerControllerB = __instance.MeetsStandardPlayerCollisionConditions(other, false, false);
-						if (playerControllerB != null)
-						{
-							__instance.KillPlayerServerRpc((int)playerControllerB.playerClientId);
-						}
+	
+						__instance.KillPlayerServerRpc((int)target.playerClientId);
+
 					}
 
 				}
@@ -506,13 +511,26 @@ namespace LethalEscape
 				PlayerControllerB target = other.gameObject.GetComponent<PlayerControllerB>();
 				
 				if (target != null && !target.isPlayerDead && target.isPlayerControlled && target != GameNetworkManager.Instance.localPlayerController)
-				{ 
-					PlayerControllerB playerControllerB = __instance.MeetsStandardPlayerCollisionConditions(other, false, false);
-					if (playerControllerB != null)
+				{
+
+					if (__instance.timeSinceHittingPlayer <= 0.5)
 					{
-						playerControllerB.DamagePlayer(30, true, true, CauseOfDeath.Mauling, 0, false, default(Vector3));
-						__instance.HitPlayerServerRpc();
+						return;
 					}
+					if (__instance.stunNormalizedTimer > 0f)
+					{
+						return;
+					}
+					if (!__instance.inChase)
+					{
+						return;
+					}
+					__instance.timeSinceHittingPlayer = 0;
+
+					target.DamagePlayer(30, true, true, CauseOfDeath.Mauling, 0, false, default(Vector3));
+					target.DamagePlayerFromOtherClientServerRpc(30, Vector3.zero, -1);
+					__instance.HitPlayerServerRpc();
+
 				}
 			}
 		}
@@ -581,21 +599,29 @@ namespace LethalEscape
 				if (target != null && !target.isPlayerDead && target.isPlayerControlled && target != GameNetworkManager.Instance.localPlayerController)
 				{
 
+					if (__instance.stoppingMovement)
+					{
+						return;
+					}
 					if (__instance.currentBehaviourStateIndex != 1)
 					{
 						return;
 					}
-					if (__instance.agent.speed <= 0)
+					if (__instance.timeSinceHittingPlayer >= 0f)
+					{
+						return;
+					}
+					if (__instance.stunNormalizedTimer > 0f)
 					{
 						return;
 					}
 
-					PlayerControllerB playerControllerB = __instance.MeetsStandardPlayerCollisionConditions(other, false, false);
-					if (playerControllerB != null)
-					{
-						playerControllerB.DamagePlayer(90, true, true, CauseOfDeath.Mauling, 2, false, default(Vector3));
-						playerControllerB.JumpToFearLevel(1f, true);
-					}
+					__instance.timeSinceHittingPlayer = .2f;
+
+					target.DamagePlayer(90, true, true, CauseOfDeath.Mauling, 2, false, default(Vector3));
+					target.DamagePlayerFromOtherClientServerRpc(90, Vector3.zero, -1);
+					target.JumpToFearLevel(1f, true);
+
 				}
 			}
 		}
@@ -653,12 +679,24 @@ namespace LethalEscape
 				if (target != null && !target.isPlayerDead && target.isPlayerControlled && target != GameNetworkManager.Instance.localPlayerController)
 				{
 
-					PlayerControllerB playerControllerB = __instance.MeetsStandardPlayerCollisionConditions(other, __instance.overrideAnimation >= 1.05, false);
-					if (playerControllerB != null)
+
+					if (__instance.onWall)
 					{
-						playerControllerB.DamagePlayer(45, true, true, CauseOfDeath.Mauling, 0, false, default(Vector3));
-						__instance.HitPlayerServerRpc((int)GameNetworkManager.Instance.localPlayerController.playerClientId);
+						return;
 					}
+
+					if (__instance.timeSinceHittingPlayer <= 1f)
+					{
+						return;
+					}
+					if (__instance.stunNormalizedTimer > 0f)
+					{
+						return;
+					}
+					__instance.timeSinceHittingPlayer = 0f;
+					target.DamagePlayer(90, true, true, CauseOfDeath.Mauling, 0, false, default(Vector3));
+					target.DamagePlayerFromOtherClientServerRpc(90, Vector3.zero, -1);
+					__instance.HitPlayerServerRpc((int)target.playerClientId);
 
 				}
 			}
@@ -728,20 +766,18 @@ namespace LethalEscape
 
 				if (target != null && !target.isPlayerDead && target.isPlayerControlled && target != GameNetworkManager.Instance.localPlayerController)
 				{
-					if (__instance.isEnemyDead)
-					{
-						return;
-					}
 
 					if (__instance.stunNormalizedTimer >= 0f)
 					{
 						return;
 					}
-					PlayerControllerB playerControllerB = __instance.MeetsStandardPlayerCollisionConditions(other, __instance.agent.speed <= 0f, false);
-					if (playerControllerB != null)
+					if (__instance.timeSinceHittingPlayer < 1f)
 					{
-						__instance.LegKickPlayerServerRpc((int)playerControllerB.playerClientId);
+						return;
 					}
+					__instance.timeSinceHittingPlayer = 0;
+					__instance.LegKickPlayerServerRpc((int)target.playerClientId);
+
 				}
 			}
 		}
@@ -808,20 +844,23 @@ namespace LethalEscape
 
 				if (target != null && !target.isPlayerDead && target.isPlayerControlled && target != GameNetworkManager.Instance.localPlayerController)
 				{
-
-					if (__instance.agent.stoppingDistance >= 5)
+					if (__instance.timeSinceHittingLocalPlayer < 0.25f)
 					{
 						return;
 					}
-					PlayerControllerB playerControllerB = __instance.MeetsStandardPlayerCollisionConditions(other, false, false);
-					if (playerControllerB != null)
+					if (__instance.tamedTimer > 0f && __instance.angeredTimer < 0f)
 					{
-						playerControllerB.DamagePlayer(35, true, true, CauseOfDeath.Unknown, 0, false, default(Vector3));
-						if (playerControllerB.isPlayerDead)
-						{
-							__instance.SlimeKillPlayerEffectServerRpc((int)playerControllerB.playerClientId);
-						}
+						return;
 					}
+					__instance.timeSinceHittingLocalPlayer = 0f;
+
+					target.DamagePlayerFromOtherClientServerRpc(35, Vector3.zero, -1);
+					target.DamagePlayer(35, true, true, CauseOfDeath.Unknown, 0, false, default(Vector3));
+					if (target.isPlayerDead)
+					{
+						__instance.SlimeKillPlayerEffectServerRpc((int)target.playerClientId);
+					}
+
 				}
 			}
 		}
@@ -900,12 +939,15 @@ namespace LethalEscape
 
 				if (target != null && !target.isPlayerDead && target.isPlayerControlled && target != GameNetworkManager.Instance.localPlayerController)
 				{
-					PlayerControllerB playerControllerB = __instance.MeetsStandardPlayerCollisionConditions(other, false, false);
-					if (playerControllerB != null)
+					if (__instance.timeSinceHittingPlayer <= 1f)
 					{
-						playerControllerB.DamagePlayer(20, true, true, CauseOfDeath.Mauling, 0, false, default(Vector3));
-						__instance.BitePlayerServerRpc((int)playerControllerB.playerClientId);
+						return;
 					}
+					__instance.timeSinceHittingPlayer = 0;
+					target.DamagePlayer(20, true, true, CauseOfDeath.Mauling, 0, false, default(Vector3));
+					target.DamagePlayerFromOtherClientServerRpc(20, Vector3.zero, -1);
+					__instance.BitePlayerServerRpc((int)target.playerClientId);
+
 				}
 			}
 		}
